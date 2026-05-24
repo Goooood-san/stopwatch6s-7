@@ -1,0 +1,23 @@
+
+// 追加
+var startSound = new Audio('start.mp3');
+var stopSound = new Audio('stop.mp3');
+
+startSound.preload = 'auto';
+stopSound.preload = 'auto';
+
+function playStartSound() {
+  startSound.currentTime = 0;
+  startSound.play();
+}
+
+function playStopSound() {
+  stopSound.currentTime = 0;
+  stopSound.play();
+}
+
+// startTimer() 内
+playStartSound();
+
+// stopTimer() 内
+playStopSound();
