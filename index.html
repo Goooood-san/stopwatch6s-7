@@ -111,12 +111,15 @@ button:active {
 }
 </style>
 </head>
+
 <body>
 
 <div id="stopwatchScreen" class="screen active">
+
   <div id="statusBar"></div>
 
   <div class="main">
+
     <div id="timeDisplay">0.000</div>
 
     <div id="message">
@@ -126,23 +129,35 @@ button:active {
     <div class="buttonArea">
       <button id="historyButton">履歴</button>
     </div>
+
   </div>
 </div>
 
 <div id="historyScreen" class="screen">
+
   <div class="historyHeader">
+
     <div class="historyTitle">履歴</div>
 
     <div class="historyButtons">
       <button id="backButton">戻る</button>
       <button id="clearButton">履歴をクリア</button>
     </div>
+
   </div>
 
   <div id="historyList"></div>
+
 </div>
 
 <script>
+
+var startSound = new Audio('start.mp3');
+var stopSound = new Audio('stop.mp3');
+
+startSound.preload = 'auto';
+stopSound.preload = 'auto';
+
 var statusBar = document.getElementById('statusBar');
 var timeDisplay = document.getElementById('timeDisplay');
 var message = document.getElementById('message');
@@ -160,41 +175,19 @@ var armed = false;
 var startTime = 0;
 var animationFrame;
 var recordCount = 0;
-var audioContext = null;
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js');
 }
 
-function getAudioContext() {
-  if (!audioContext) {
-    audioContext = new(window.AudioContext || window.webkitAudioContext)();
-  }
-
-  if (audioContext.state === 'suspended') {
-    audioContext.resume();
-  }
-
-  return audioContext;
+function playStartSound() {
+  startSound.currentTime = 0;
+  startSound.play();
 }
 
-function beep(freq, duration) {
-  var ctx = getAudioContext();
-
-  var osc = ctx.createOscillator();
-  var gain = ctx.createGain();
-
-  osc.type = 'square';
-  osc.frequency.value = freq;
-
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-
-  gain.gain.setValueAtTime(0.2, ctx.currentTime);
-  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
-
-  osc.start();
-  osc.stop(ctx.currentTime + duration / 1000);
+function playStopSound() {
+  stopSound.currentTime = 0;
+  stopSound.play();
 }
 
 function format(ms) {
@@ -202,15 +195,18 @@ function format(ms) {
 }
 
 function updateTimer() {
+
   if (!timerRunning) return;
 
   var elapsed = performance.now() - startTime;
+
   timeDisplay.innerHTML = format(elapsed);
 
   animationFrame = requestAnimationFrame(updateTimer);
 }
 
 function startTimer() {
+
   timerRunning = true;
   armed = false;
 
@@ -218,27 +214,31 @@ function startTimer() {
 
   message.innerHTML = '計測中';
 
-  beep(1200, 100);
+  playStartSound();
 
   updateTimer();
 }
 
 function stopTimer() {
+
   timerRunning = false;
 
   cancelAnimationFrame(animationFrame);
 
   var elapsed = performance.now() - startTime;
+
   var formatted = format(elapsed);
 
   timeDisplay.innerHTML = formatted;
 
-  beep(700, 180);
+  playStopSound();
 
   recordCount++;
 
   var div = document.createElement('div');
+
   div.className = 'record';
+
   div.innerHTML = recordCount + '　　' + formatted + ' 秒';
 
   historyList.insertBefore(div, historyList.firstChild);
@@ -247,6 +247,7 @@ function stopTimer() {
 }
 
 function validTouch(touches) {
+
   if (touches.length < 2) {
     return false;
   }
@@ -255,6 +256,7 @@ function validTouch(touches) {
   var right = false;
 
   for (var i = 0; i < touches.length; i++) {
+
     if (touches[i].clientX < window.innerWidth / 2) {
       left = true;
     } else {
@@ -266,22 +268,27 @@ function validTouch(touches) {
 }
 
 historyButton.onclick = function() {
+
   stopwatchScreen.className = 'screen';
+
   historyScreen.className = 'screen active';
 };
 
 backButton.onclick = function() {
+
   historyScreen.className = 'screen';
+
   stopwatchScreen.className = 'screen active';
 };
 
 clearButton.onclick = function() {
+
   historyList.innerHTML = '';
+
   recordCount = 0;
 };
 
 document.addEventListener('touchstart', function(e) {
-  getAudioContext();
 
   if (historyScreen.className.indexOf('active') >= 0) {
     return;
@@ -296,6 +303,7 @@ document.addEventListener('touchstart', function(e) {
   var ready = validTouch(e.touches);
 
   if (!timerRunning && ready) {
+
     armed = true;
 
     statusBar.className = 'ready';
@@ -304,13 +312,16 @@ document.addEventListener('touchstart', function(e) {
   }
 
   if (timerRunning && ready) {
+
     stopTimer();
 
     statusBar.className = 'ready';
   }
+
 }, { passive: false });
 
 document.addEventListener('touchend', function(e) {
+
   if (historyScreen.className.indexOf('active') >= 0) {
     return;
   }
@@ -328,7 +339,9 @@ document.addEventListener('touchend', function(e) {
   if (armed && !timerRunning && e.touches.length === 0) {
     startTimer();
   }
+
 }, { passive: false });
+
 </script>
 
 </body>
