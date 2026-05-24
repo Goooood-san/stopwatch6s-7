@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+<title>STOPWATCH6S-7</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#111111">
+
+<style>
+html {
+  height: 100%;
+  -webkit-text-size-adjust: none;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #111;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.screen {
+  display: none;
+  height: 100%;
+}
+
+.active {
+  display: block;
+}
+
+#statusBar {
+  height: 20px;
+  background: #bb0000;
+}
+
+#statusBar.ready {
+  background: #00bb33;
+}
+
+.main {
+  text-align: center;
+  padding-top: 8vh;
+}
+
+#timeDisplay {
+  font-size: 72px;
+  font-weight: bold;
+  margin-top: 20px;
+}
+
+#message {
+  margin-top: 20px;
+  font-size: 22px;
+}
+
+.buttonArea {
+  margin-top: 40px;
+}
+
+button {
+  border: none;
+  border-radius: 12px;
+  background: #2c2c2c;
+  color: white;
+  font-size: 20px;
+  padding: 14px 24px;
+}
+
+button:active {
+  opacity: 0.7;
+}
+
+.historyHeader {
+  padding: 16px;
+  border-bottom: 1px solid #333;
+}
+
+.historyTitle {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.historyButtons {
+  display: flex;
+  gap: 10px;
+}
+
+#historyList {
+  height: calc(100% - 130px);
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 40px;
+}
+
+.record {
+  font-size: 22px;
+  border-bottom: 1px solid #333;
+  padding: 16px 0;
+  text-align: center;
+}
+</style>
+</head>
+<body>
+
+<div id="stopwatchScreen" class="screen active">
+  <div id="statusBar"></div>
+
+  <div class="main">
+    <div id="timeDisplay">0.000</div>
+
+    <div id="message">
+      両手で画面をタッチしてください
+    </div>
+
+    <div class="buttonArea">
+      <button id="historyButton">履歴</button>
+    </div>
+  </div>
+</div>
+
+<div id="historyScreen" class="screen">
+  <div class="historyHeader">
+    <div class="historyTitle">履歴</div>
+
+    <div class="historyButtons">
+      <button id="backButton">戻る</button>
+      <button id="clearButton">履歴をクリア</button>
+    </div>
+  </div>
+
+  <div id="historyList"></div>
+</div>
+
+<script>
+var statusBar = document.getElementById('statusBar');
+var timeDisplay = document.getElementById('timeDisplay');
+var message = document.getElementById('message');
+var historyList = document.getElementById('historyList');
+
+var stopwatchScreen = document.getElementById('stopwatchScreen');
+var historyScreen = document.getElementById('historyScreen');
+
+var historyButton = document.getElementById('historyButton');
+var backButton = document.getElementById('backButton');
+var clearButton = document.getElementById('clearButton');
+
+var timerRunning = false;
+var armed = false;
+var startTime = 0;
+var animationFrame;
+var recordCount = 0;
+var audioContext = null;
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+
+function getAudioContext() {
+  if (!audioContext) {
+    audioContext = new(window.AudioContext || window.webkitAudioContext)();
+  }
+
+  if (audioContext.state === 'suspended') {
+    audioContext.resume();
+  }
+
+  return audioContext;
+}
+
+function beep(freq, duration) {
+  var ctx = getAudioContext();
+
+  var osc = ctx.createOscillator();
+  var gain = ctx.createGain();
+
+  osc.type = 'square';
+  osc.frequency.value = freq;
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  gain.gain.setValueAtTime(0.2, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
+
+  osc.start();
+  osc.stop(ctx.currentTime + duration / 1000);
+}
+
+function format(ms) {
+  return (ms / 1000).toFixed(3);
+}
+
+function updateTimer() {
+  if (!timerRunning) return;
+
+  var elapsed = performance.now() - startTime;
+  timeDisplay.innerHTML = format(elapsed);
+
+  animationFrame = requestAnimationFrame(updateTimer);
+}
+
+function startTimer() {
+  timerRunning = true;
+  armed = false;
+
+  startTime = performance.now();
+
+  message.innerHTML = '計測中';
+
+  beep(1200, 100);
+
+  updateTimer();
+}
+
+function stopTimer() {
+  timerRunning = false;
+
+  cancelAnimationFrame(animationFrame);
+
+  var elapsed = performance.now() - startTime;
+  var formatted = format(elapsed);
+
+  timeDisplay.innerHTML = formatted;
+
+  beep(700, 180);
+
+  recordCount++;
+
+  var div = document.createElement('div');
+  div.className = 'record';
+  div.innerHTML = recordCount + '　　' + formatted + ' 秒';
+
+  historyList.insertBefore(div, historyList.firstChild);
+
+  message.innerHTML = '両手でタッチしてください';
+}
+
+function validTouch(touches) {
+  if (touches.length < 2) {
+    return false;
+  }
+
+  var left = false;
+  var right = false;
+
+  for (var i = 0; i < touches.length; i++) {
+    if (touches[i].clientX < window.innerWidth / 2) {
+      left = true;
+    } else {
+      right = true;
+    }
+  }
+
+  return left && right;
+}
+
+historyButton.onclick = function() {
+  stopwatchScreen.className = 'screen';
+  historyScreen.className = 'screen active';
+};
+
+backButton.onclick = function() {
+  historyScreen.className = 'screen';
+  stopwatchScreen.className = 'screen active';
+};
+
+clearButton.onclick = function() {
+  historyList.innerHTML = '';
+  recordCount = 0;
+};
+
+document.addEventListener('touchstart', function(e) {
+  getAudioContext();
+
+  if (historyScreen.className.indexOf('active') >= 0) {
+    return;
+  }
+
+  if (e.target.tagName === 'BUTTON') {
+    return;
+  }
+
+  e.preventDefault();
+
+  var ready = validTouch(e.touches);
+
+  if (!timerRunning && ready) {
+    armed = true;
+
+    statusBar.className = 'ready';
+
+    message.innerHTML = '手を離すとスタート';
+  }
+
+  if (timerRunning && ready) {
+    stopTimer();
+
+    statusBar.className = 'ready';
+  }
+}, { passive: false });
+
+document.addEventListener('touchend', function(e) {
+  if (historyScreen.className.indexOf('active') >= 0) {
+    return;
+  }
+
+  if (e.target.tagName === 'BUTTON') {
+    return;
+  }
+
+  e.preventDefault();
+
+  if (!validTouch(e.touches)) {
+    statusBar.className = '';
+  }
+
+  if (armed && !timerRunning && e.touches.length === 0) {
+    startTimer();
+  }
+}, { passive: false });
+</script>
+
+</body>
+</html>
